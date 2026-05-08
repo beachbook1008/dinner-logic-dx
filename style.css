@@ -1,0 +1,67 @@
+/* 全体の背景：トモコレの空のような水色と水玉模様 */
+.stApp {
+    background-color: #4fc3f7;
+    background-image: radial-gradient(#ffffff 20%, transparent 20%), radial-gradient(#ffffff 20%, transparent 20%);
+    background-position: 0 0, 50px 50px;
+    background-size: 100px 100px;
+}
+
+/* メインのコンテナ：ゲームの吹き出し風に */
+[data-testid="stVerticalBlock"] > div {
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 30px;
+    padding: 20px;
+    border: 5px solid #ffeb3b; /* トモコレっぽい黄色い枠線 */
+}
+
+/* ボタン：ゲームの決定ボタンみたいな原色グリーン！ */
+div.stButton > button {
+    background-color: #4caf50 !important;
+    color: white !important;
+    border-radius: 50px !important;
+    border: 4px solid #ffffff !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    box-shadow: 0 4px #2e7d32;
+    transition: 0.1s;
+    width: 100%;
+}
+
+div.stButton > button:active {
+    box-shadow: 0 0 #2e7d32;
+    transform: translateY(4px);
+}
+
+/* サイドバー：メニュー画面風のオレンジ */
+[data-testid="stSidebar"] {
+    background-color: #ff9800;
+    border-right: 8px solid #f57c00;
+}
+
+/* メトリック（カロリー表示）：ド派手な吹き出し */
+[data-testid="stMetric"] {
+    background-color: #ffffff;
+    border-radius: 20px;
+    border: 4px solid #ff4081;
+    padding: 10px;
+    text-align: center;
+}
+
+[data-testid="stMetricLabel"] > div {
+    color: #333 !important;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #ff4081 !important;
+    font-size: 40px !important;
+}
+
+/* タイトル：目立つように */
+h1 {
+    color: #ffffff !important;
+    text-shadow: 3px 3px 0px #ff4081, 6px 6px 0px #333333;
+    font-size: 50px !important;
+    text-align: center;
+}
