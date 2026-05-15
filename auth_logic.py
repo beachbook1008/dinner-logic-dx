@@ -22,20 +22,111 @@ USER_FILE = "user_settings.csv"
 MENU_FILE = "dinner_list.csv"
 
 def get_all_users():
-    cols = ["user_id", "password", "target_weight", "last_update", "consecutive_days"]
+    cols = ["user_id", "password", "target_weight", "height", "weight", "age", "gender", "profile_saved_date", "last_update", "consecutive_days"]
     if os.path.exists(USER_FILE):
         try:
             df = pd.read_csv(USER_FILE)
             for c in cols:
-                if c not in df.columns: df[c] = None
+                if c not in df.columns:
+                    df[c] = None
             return df
         except:
             return pd.DataFrame(columns=cols)
     return pd.DataFrame(columns=cols)
 
-def save_user(user_id, password, target_weight=None, consecutive_days=None):
+def safe_float(value, default=0.0):
+    try:
+        if pd.isna(value):
+            return default
+        return float(value)
+    except:
+        return default
+
+def safe_int(value, default=0):
+    try:
+        if pd.isna(value):
+            return default
+        return int(float(value))
+    except:
+        return default
+
+def inject_responsive_css():
+    css = """
+    <style>
+    /* 全体の余白を調整 */
+    .main .block-container {
+        padding-top: 1rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    @media (max-width: 900px) {
+        section[data-testid="stSidebar"], section[data-testid="stApp"] .block-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            position: relative !important;
+            margin: 0 auto !important;
+        }
+
+        div[data-testid="stSidebar"] {
+            min-width: 0 !important;
+        }
+
+        button, input, select, textarea {
+            width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        .stButton > button {
+            padding: 0.9rem 1rem !important;
+            font-size: 1rem !important;
+        }
+
+        .stTextInput>div, .stNumberInput>div, .stSelectbox>div, .stRadio>div,
+        .stTextInput, .stNumberInput, .stSelectbox, .stRadio,
+        .stMarkdown, .stInfo, .stSuccess, .stWarning, .stError {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+            font-size: 1rem !important;
+            line-height: 1.5 !important;
+        }
+
+        .stSidebar .css-1avgm1g,
+        .stSidebar .css-1d391kg,
+        .stSidebar .css-1n2mwow {
+            flex-direction: column !important;
+            width: 100% !important;
+        }
+
+        .css-1n2mwow > div,
+        .css-1d391kg > div,
+        .css-1avgm1g > div {
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        .css-10trblm, .css-1lcbmhc {
+            width: 100% !important;
+        }
+
+        .css-1q8dd3e {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def save_user(user_id, password, target_weight=None, consecutive_days=None, height=None, weight=None, age=None, gender=None, profile_saved_date=None):
     df = get_all_users()
     u_str = str(user_id)
+    if profile_saved_date is None and (height is not None or weight is not None or age is not None or gender is not None):
+        profile_saved_date = datetime.now().strftime("%Y-%m-%d")
+
     if u_str in df['user_id'].astype(str).values:
         idx = df[df['user_id'].astype(str) == u_str].index[0]
         if password: df.at[idx, 'password'] = password
@@ -44,10 +135,43 @@ def save_user(user_id, password, target_weight=None, consecutive_days=None):
             df.at[idx, 'last_update'] = datetime.now().strftime("%Y-%m-%d")
         if consecutive_days is not None:
             df.at[idx, 'consecutive_days'] = consecutive_days
+        if height is not None:
+            df.at[idx, 'height'] = height
+        if weight is not None:
+            df.at[idx, 'weight'] = weight
+        if age is not None:
+            df.at[idx, 'age'] = age
+        if gender is not None:
+            df.at[idx, 'gender'] = gender
+        if profile_saved_date is not None:
+            df.at[idx, 'profile_saved_date'] = profile_saved_date
     else:
-        new_row = pd.DataFrame({"user_id": [user_id], "password": [password], "target_weight": [target_weight], "last_update": [datetime.now().strftime("%Y-%m-%d")], "consecutive_days": [consecutive_days or 1]})
+        new_row = pd.DataFrame({
+            "user_id": [user_id],
+            "password": [password],
+            "target_weight": [target_weight],
+            "height": [height],
+            "weight": [weight],
+            "age": [age],
+            "gender": [gender],
+            "profile_saved_date": [profile_saved_date or datetime.now().strftime("%Y-%m-%d")],
+            "last_update": [datetime.now().strftime("%Y-%m-%d")],
+            "consecutive_days": [consecutive_days or 1]
+        })
         df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(USER_FILE, index=False)
+
+PROFILE_EXPIRE_DAYS = 30
+
+def is_profile_locked(user_row):
+    saved_date = user_row.get('profile_saved_date')
+    if pd.isna(saved_date) or not saved_date:
+        return False
+    try:
+        saved_date = datetime.strptime(str(saved_date), "%Y-%m-%d").date()
+        return (datetime.now().date() - saved_date).days < PROFILE_EXPIRE_DAYS
+    except:
+        return False
 
 def reset_basic_info_on_month_start(user_id):
     if datetime.now().day != 1:
@@ -101,251 +225,89 @@ def load_menu():
     except:
         return pd.DataFrame()
 
-# --- 3. 画面制御ロジック ---
-if 'is_logged_in' not in st.session_state:
-    st.session_state['is_logged_in'] = False
-if 'show_register' not in st.session_state:
-    st.session_state['show_register'] = False
-if 'selected_dinner' not in st.session_state:
-    st.session_state['selected_dinner'] = None
-if 'selected_dinner_cal' not in st.session_state:
-    st.session_state['selected_dinner_cal'] = 0
+def show_auth_screen():
+    # --- 3. 画面制御ロジック ---
+    if 'is_logged_in' not in st.session_state:
+        st.session_state['is_logged_in'] = False
+    if 'show_register' not in st.session_state:
+        st.session_state['show_register'] = False
+    if 'selected_dinner' not in st.session_state:
+        st.session_state['selected_dinner'] = None
+    if 'selected_dinner_cal' not in st.session_state:
+        st.session_state['selected_dinner_cal'] = 0
 
-# A. ログイン・登録画面
-if not st.session_state['is_logged_in']:
-    if st.session_state['show_register']:
-        # 📝 新規会員登録画面
-        st.markdown("<div style='text-align: center;'><h1 style='color: #ff6b6b;'>📝 新規会員登録</h1></div>", unsafe_allow_html=True)
-        
-        with st.container(border=True):
-            st.markdown("<p style='text-align: center; color: #666; font-size: 14px;'>新しくアカウントを作成してサンダーさんと一緒にダイエットを始めましょう！</p>", unsafe_allow_html=True)
-            st.markdown("")
+    # A. ログイン・登録画面
+    if not st.session_state['is_logged_in']:
+        if st.session_state['show_register']:
+            # 📝 新規会員登録画面
+            st.markdown("<div style='text-align: center;'><h1 style='color: #ff6b6b;'>📝 新規会員登録</h1></div>", unsafe_allow_html=True)
             
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                n_id = st.text_input("希望ID", key="reg_id", placeholder="ユーザーID")
-                n_pw = st.text_input("パスワード", type="password", key="reg_pw", placeholder="パスワード")
-                
+            with st.container(border=True):
+                st.markdown("<p style='text-align: center; color: #666; font-size: 14px;'>新しくアカウントを作成してサンダーさんと一緒にダイエットを始めましょう！</p>", unsafe_allow_html=True)
                 st.markdown("")
-                col_a, col_b = st.columns(2)
                 
-                with col_a:
-                    if st.button("📝 登録", use_container_width=True):
-                        if n_id and n_pw:
-                            save_user(n_id, n_pw)
-                            st.success("登録完了！🥢 さあ、始めましょう！")
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    n_id = st.text_input("希望ID", key="reg_id", placeholder="ユーザーID")
+                    n_pw = st.text_input("パスワード", type="password", key="reg_pw", placeholder="パスワード")
+                    
+                    st.markdown("")
+                    col_a, col_b = st.columns(2)
+                    
+                    with col_a:
+                        if st.button("📝 登録", use_container_width=True):
+                            if n_id and n_pw:
+                                save_user(n_id, n_pw)
+                                st.success("登録完了！🥢 さあ、始めましょう！")
+                                st.session_state['show_register'] = False
+                                st.rerun()
+                            else:
+                                st.error("IDとパスワードを入力してね！")
+                    
+                    with col_b:
+                        if st.button("🔙 戻る", use_container_width=True):
                             st.session_state['show_register'] = False
                             st.rerun()
-                        else:
-                            st.error("IDとパスワードを入力してね！")
-                
-                with col_b:
-                    if st.button("🔙 戻る", use_container_width=True):
-                        st.session_state['show_register'] = False
-                        st.rerun()
-    else:
-        # 🔐 ログイン画面
-        st.markdown("<div style='text-align: center;'><h1 style='color: #2196F3;'>🔐 今日からあなたもライエット</h1></div>", unsafe_allow_html=True)
-        
-        with st.container(border=True):
-            st.markdown("<p style='text-align: center; color: #666; font-size: 14px;'>美食家サンダーさんとの美食ダイエットの冒険へようこそ！</p>", unsafe_allow_html=True)
-            st.markdown("")
+        else:
+            # 🔐 ログイン画面
+            st.markdown("<div style='text-align: center;'><h1 style='color: #2196F3;'>🔐 今日からあなたもライエット</h1></div>", unsafe_allow_html=True)
             
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                l_id = st.text_input("ユーザーID", key="login_id", placeholder="IDを入力")
-                l_pw = st.text_input("パスワード", type="password", key="login_pw", placeholder="パスワードを入力")
-                
+            with st.container(border=True):
+                st.markdown("<p style='text-align: center; color: #666; font-size: 14px;'>美食家サンダーさんとの美食ダイエットの冒険へようこそ！</p>", unsafe_allow_html=True)
                 st.markdown("")
-                if st.button("🔓 ログイン", use_container_width=True):
-                    df = get_all_users()
-                    match = df[(df['user_id'].astype(str) == l_id) & (df['password'].astype(str) == l_pw)]
+                
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    l_id = st.text_input("ユーザーID", key="login_id", placeholder="IDを入力")
+                    l_pw = st.text_input("パスワード", type="password", key="login_pw", placeholder="パスワードを入力")
                     
-                    if not match.empty:
-                        user_info = match.iloc[0]
-                        reset_basic_info_on_month_start(l_id)
+                    st.markdown("")
+                    if st.button("🔓 ログイン", use_container_width=True):
+                        df = get_all_users()
+                        match = df[(df['user_id'].astype(str) == l_id) & (df['password'].astype(str) == l_pw)]
                         
-                        # 連続ログイン日数を計算
-                        consecutive_days = calculate_consecutive_days(l_id)
-                        save_user(l_id, user_info['password'], user_info['target_weight'], consecutive_days)
-                        
-                        st.session_state['height'] = float(user_info.get('height', 160.0))
-                        st.session_state['weight'] = float(user_info.get('weight', 55.0))
-                        st.session_state['age'] = int(user_info.get('age', 20))
-                        st.session_state['gender'] = user_info.get('gender', "女子")
-                        
-                        st.session_state['is_logged_in'] = True
-                        st.session_state['current_user'] = l_id
-                        
-                        st.success(f"ログイン成功！おかえりなさい、{l_id}さん 🥢")
+                        if not match.empty:
+                            user_info = match.iloc[0]
+                            reset_basic_info_on_month_start(l_id)
+                            
+                            # 連続ログイン日数を計算
+                            consecutive_days = calculate_consecutive_days(l_id)
+                            save_user(l_id, user_info['password'], user_info['target_weight'], consecutive_days)
+                            
+                            st.session_state['height'] = safe_float(user_info.get('height', 160.0), 160.0)
+                            st.session_state['weight'] = safe_float(user_info.get('weight', 55.0), 55.0)
+                            st.session_state['age'] = safe_int(user_info.get('age', 20), 20)
+                            st.session_state['gender'] = user_info.get('gender', "女子")
+                            
+                            st.session_state['is_logged_in'] = True
+                            st.session_state['current_user'] = l_id
+                            
+                            st.success(f"ログイン成功！おかえりなさい、{l_id}さん 🥢")
+                            st.rerun()
+                        else: 
+                            st.error("IDまたはパスワードが間違っています！")
+                    
+                    st.markdown("")
+                    if st.button("✨ 新規登録はこちら", use_container_width=True):
+                        st.session_state['show_register'] = True
                         st.rerun()
-                    else: 
-                        st.error("IDまたはパスワードが間違っています！")
-                
-                st.markdown("")
-                if st.button("✨ 新規登録はこちら", use_container_width=True):
-                    st.session_state['show_register'] = True
-                    st.rerun()
-    
-    st.stop()
-
-# --- ここから下は元の「B. ログイン後のデータ取得」に続きます ---
-# B. ログイン後のデータ取得
-user_id = st.session_state['current_user']
-df_users = get_all_users()
-user_row = df_users[df_users['user_id'].astype(str) == user_id].iloc[0]
-df_menu = load_menu()
-
-# C. 目標設定画面
-if pd.isna(user_row['target_weight']) or datetime.now().day == 1:
-    st.title(f"📅 目標設定 ({user_id})")
-    t_w = st.number_input("今月の目標体重 (kg)", 30.0, 150.0, 52.0)
-    if st.button("目標を保存"):
-        save_user(user_id, user_row['password'], t_w)
-        st.rerun()
-    st.stop()
-
-# --- 4. メイン画面の準備 ---
-# 画像アバターのパスを1箇所で確定させる！
-if os.path.exists("mii_thunder.jpg"):
-    thunder_avatar = "mii_thunder.jpg"
-elif os.path.exists("mii_thunder.png"):
-    thunder_avatar = "mii_thunder.png"
-else:
-    thunder_avatar = "⚡️"
-
-st.title(f"🥘 美食家サンダーさん とライエット")
-
-# --- 連続ログイン日数表示 ---
-consecutive_days = int(user_row.get('consecutive_days', 1))
-st.markdown("---")
-with st.container(border=True):
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown(f"<div style='text-align: center;'><h2 style='color: #ff6b6b; margin-bottom: 5px;'>🔥 連続ログイン</h2><p style='font-size: 16px; color: #666; margin: 5px 0;'>あなたは今日で</p><p style='font-size: 48px; font-weight: bold; color: #ff6b6b; margin: 10px 0;'>{consecutive_days}</p><p style='font-size: 16px; color: #666; margin-top: 5px;'>日連続で頑張ってるよ！</p></div>", unsafe_allow_html=True)
-
-st.markdown("---")
-
-with st.sidebar:
-    st.image(thunder_avatar, width=150, caption="美食家サンダー⚡️")
-    st.header("👤 ステータス")
-    st.success(f"User: {user_id}\nTarget: {user_row['target_weight']}kg")
-    
-    weight = st.number_input("今の体重 (kg)", 30.0, 150.0, st.session_state['weight'])
-    height = st.number_input("身長 (cm)", 100.0, 220.0, st.session_state['height'])
-    age = st.number_input("年齢", 15, 100, st.session_state['age'])
-    gender = st.radio("性別", ["女子", "男子"], index=["女子", "男子"].index(st.session_state['gender']))
-    
-    st.markdown("---")
-    levels = {"1.2：座りっぱなし": 1.2, "1.375：軽い運動": 1.375, "1.55：適度な運動": 1.55, "1.725：活発な運動": 1.725, "1.9：非常に活発": 1.9}
-    activity = levels[st.selectbox("生活スタイル", list(levels.keys()))]
-    
-    if st.button("ログアウト"):
-        st.session_state.clear()
-        st.rerun()
-
-# --- 5. 計算ロジック ---
-bmr = (447.593 + (9.247 * weight) + (3.098 * height) - (4.330 * age)) if gender == "女子" else (88.362 + (13.397 * weight) + (4.799 * height) - (5.677 * age))
-target_cal = (bmr * activity) - ((weight - float(user_row['target_weight'])) * 7200 / 30)
-
-col1, col2 = st.columns(2)
-with col1:
-    b_items = st.multiselect("朝食", df_menu['display'].tolist() if not df_menu.empty else [])
-with col2:
-    l_items = st.multiselect("昼食", df_menu['display'].tolist() if not df_menu.empty else [])
-
-# 選択された朝食と昼食の表示
-if b_items or l_items:
-    st.subheader("🍽️ 選択されたメニュー")
-    
-    col1, col2 = st.columns(2)
-    
-    # 朝食の表示
-    if b_items:
-        with col1:
-            with st.container(border=True):
-                st.markdown(f"<h3 style='text-align: center; color: #ffa500;'>🌅 朝食</h3>", unsafe_allow_html=True)
-                for item in b_items:
-                    st.markdown(f"<p style='text-align: center; color: #666; font-size: 14px; font-weight: bold;'>✓ {item}</p>", unsafe_allow_html=True)
-    
-    # 昼食の表示
-    if l_items:
-        with col2:
-            with st.container(border=True):
-                st.markdown(f"<h3 style='text-align: center; color: #4CAF50;'>☀️ 昼食</h3>", unsafe_allow_html=True)
-                for item in l_items:
-                    st.markdown(f"<p style='text-align: center; color: #666; font-size: 14px; font-weight: bold;'>✓ {item}</p>", unsafe_allow_html=True)
-
-
-dinner_cal = target_cal - (df_menu[df_menu['display'].isin(b_items)]['cal'].sum() + df_menu[df_menu['display'].isin(l_items)]['cal'].sum())
-st.metric("今日の残り枠", f"{int(dinner_cal)} kcal")
-
-# --- 6. 自動挨拶（1回だけ表示！） ---
-st.divider()
-with st.chat_message("assistant", avatar=thunder_avatar):
-    if dinner_cal > 500:
-        st.write(f"あったまいいね！今日はまだ {int(dinner_cal)}kcal も余裕があるわ。美味しいもの探しに行こうよ！")
-    elif dinner_cal > 0:
-        st.write(f"今のところ順調ね。夜は控えめな美食を楽しんで！")
-    else:
-        st.write(f"ちょっと！もうカロリーオーバーよ！明日は火鍋禁止ね！")
-
-# --- 7. おすすめメニュー表示 ---
-st.subheader("🥢 サンダーさんのおすすめ")
-if not df_menu.empty:
-    recs = df_menu[df_menu['cal'] <= dinner_cal].sort_values(by='cal', ascending=False).head(5)
-    if not recs.empty:
-        cols = st.columns(5, gap="medium")
-        for i, (_, row) in enumerate(recs.iterrows()):
-            with cols[i]:
-                with st.container(border=True):
-                    st.markdown(f"<h3 style='text-align: center;'>🍽️</h3>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='text-align: center; font-weight: bold; font-size: 16px;'>{row['store']}</p>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='text-align: center; color: #666; font-size: 14px;'>{row['name']}</p>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='text-align: center; color: #ff6b6b; font-size: 18px; font-weight: bold;'>✨ {int(row['cal'])} kcal</p>", unsafe_allow_html=True)
-                    if st.button("選択する", key=f"rec_{i}", use_container_width=True):
-                        st.session_state['selected_dinner'] = row['name']
-                        st.session_state['selected_dinner_cal'] = int(row['cal'])
-                        st.success(f"「{row['name']}」を夕食に選択しました！")
-    else:
-        st.write("おすすめメニューが見つかりません。")
-else:
-    st.write("メニューが読み込めません。")
-
-# --- 7.5 朝昼夕の合計摂取カロリー表示 ---
-breakfast_cal = df_menu[df_menu['display'].isin(b_items)]['cal'].sum()
-lunch_cal = df_menu[df_menu['display'].isin(l_items)]['cal'].sum()
-total_cal = breakfast_cal + lunch_cal + st.session_state['selected_dinner_cal']
-
-st.markdown("---")
-st.subheader("📊 本日の栄養摂取状況")
-with st.container(border=True):
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(f"<div style='text-align: center;'><p style='font-size: 14px; color: #666;'>🌅 朝食</p><p style='font-size: 24px; font-weight: bold; color: #ffa500;'>{int(breakfast_cal)}</p><p style='font-size: 12px; color: #999;'>kcal</p></div>", unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"<div style='text-align: center;'><p style='font-size: 14px; color: #666;'>☀️ 昼食</p><p style='font-size: 24px; font-weight: bold; color: #4CAF50;'>{int(lunch_cal)}</p><p style='font-size: 12px; color: #999;'>kcal</p></div>", unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"<div style='text-align: center;'><p style='font-size: 14px; color: #666;'>🌙 夕食</p><p style='font-size: 24px; font-weight: bold; color: #2196F3;'>{st.session_state['selected_dinner_cal']}</p><p style='font-size: 12px; color: #999;'>kcal</p></div>", unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"<div style='text-align: center;'><p style='font-size: 14px; color: #666;'>✅ 合計</p><p style='font-size: 28px; font-weight: bold; color: #ff6b6b;'>{int(total_cal)}</p><p style='font-size: 12px; color: #999;'>kcal</p></div>", unsafe_allow_html=True)
-
-# --- 8. AI相談室 ---
-if user_msg := st.chat_input("美食家サンダーさんに相談"):
-    with st.chat_message("assistant", avatar=thunder_avatar):
-        prompt = f"あなたは中国の美食を求めて旅する女子大生サンダーさん。口癖『あったまいいね！』。相手{user_id}。残り{int(dinner_cal)}kcal。質問:{user_msg}"
-        try:
-            response = model.generate_content(prompt)
-            st.write(response.text)
-        except Exception as e:
-            st.error(f"AIエラー: {e}")
-
-with st.sidebar:
-    st.markdown("---")
-    st.write("🎵 雷さんのBGM")
-    # YouTubeを埋め込む（autoplay=Trueにしてもブラウザの設定で止まることがあるから、再生ボタンを押してね！）
-    st.video("https://youtu.be/l7Tr8xb_tFk", format="video/mp4", start_time=0)
