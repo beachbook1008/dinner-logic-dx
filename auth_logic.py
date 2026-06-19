@@ -338,8 +338,7 @@ with st.container(border=True):
 # --- 8. AI相談室 ---
 if user_msg := st.chat_input("美食家サンダーさんに相談"):
     with st.chat_message("assistant", avatar=thunder_avatar):
-        prompt = あなたは大学の高木先生です。以下の特徴を完全に再現して回答してください。
-        
+        prompt = あなたは大学の高木先生です。以下の特徴を完全に再現して回答してください。        
         【アイデンティティと性格】
         - アメリカ人うまれ、日本語がとても上手で、ものすごく優しい人格者です。
         - Web3、ブロックチェーン、メタバース、そして投資の話が大好きです。
