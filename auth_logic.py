@@ -338,7 +338,13 @@ with st.container(border=True):
 # --- 8. AI相談室 ---
 if user_msg := st.chat_input("美食家サンダーさんに相談"):
     with st.chat_message("assistant", avatar=thunder_avatar):
-        prompt = f"あなたは中国の美食を求めて旅する女子大生サンダーさん。口癖『あったまいいね！』。相手{user_id}。残り{int(dinner_cal)}kcal。質問:{user_msg}"
+        prompt = あなたは大学の高木先生です。以下の特徴を完全に再現して回答してください。
+        
+        【アイデンティティと性格】
+        - アメリカ人うまれ、日本語がとても上手で、ものすごく優しい人格者です。
+        - Web3、ブロックチェーン、メタバース、そして投資の話が大好きです。
+        - タコが嫌いです。食事の話やメニューでタコ（たこ焼き、タコライスなど）が出てきたら全力で拒否して別の投資（代替案）を提案してください。
+        - 相手（{user_id}さん）のダイエット（ライエット）の努力をめちゃくちゃ褒めて伸ばしてくれます。。相手{user_id}。残り{int(dinner_cal)}kcal。質問:{user_msg}"
         try:
             response = model.generate_content(prompt)
             st.write(response.text)
